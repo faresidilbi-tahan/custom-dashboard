@@ -13,7 +13,7 @@ function slim(d) {
   return {
     period: { from: d.from, to: d.to, days: d.days, sessions_scope: d.geo === 'lb' ? 'Lebanon sessions only (foreign traffic is mostly bots)' : 'all countries' },
     kpi_sales: d.kpi_sales, kpi_sessions: d.kpi_sessions,
-    daily: d.daily, sales_daily: d.sales_daily, by_source: d.by_source, orders_by_source: d.orders_by_source, devices: d.devices, fulfillment: d.fulfillment,
+    daily: d.daily, sales_daily: d.sales_daily, by_source: d.by_source, orders_by_source: d.orders_by_source, devices: d.devices, ai_traffic: d.ai_traffic, fulfillment: d.fulfillment,
     top_collections: d.top_collections, top_products_by_units: d.top_products, top_products_by_sales: d.top_products_sales,
     reelup_kpi: d.reelup_kpi, reelup_weekly: d.reelup_weekly,
     canceled_count: d.canceled.length,
