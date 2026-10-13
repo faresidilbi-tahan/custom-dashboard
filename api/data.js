@@ -1,7 +1,10 @@
 // Vercel serverless function: GET /api/data?from=YYYY-MM-DD&to=YYYY-MM-DD  (&refresh=1 bypasses the 10-minute cache)
 // Env vars (Vercel → Settings → Environment Variables):
-//   SHOPIFY_STORE  = jad-b-2.myshopify.com
-//   SHOPIFY_TOKEN  = shpat_... (custom app token with read_orders, read_products, read_reports)
+//   SHOPIFY_STORE          = jad-b-2.myshopify.com
+//   SHOPIFY_CLIENT_ID      = Dev Dashboard app → Credentials → Client ID
+//   SHOPIFY_CLIENT_SECRET  = Dev Dashboard app → Credentials → Client secret
+//   (or SHOPIFY_TOKEN = a permanent shpat_ token, if you have one instead)
+// App scopes needed: read_orders, read_products, read_reports
 
 const API_VERSION = '2026-01';
 const CACHE_MS = 10 * 60 * 1000;
@@ -9,10 +12,24 @@ const cache = new Map(); // key = from|to
 
 const AI_REFERRERS = ['chatgpt', 'openai', 'perplexity', 'gemini', 'claude', 'copilot', 'grok', 'mistral', 'deepseek'];
 
+let tokenCache = { token: null, exp: 0 };
+async function accessToken() {
+  if (process.env.SHOPIFY_TOKEN) return process.env.SHOPIFY_TOKEN;
+  if (tokenCache.token && Date.now() < tokenCache.exp) return tokenCache.token;
+  const r = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/oauth/access_token`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: process.env.SHOPIFY_CLIENT_ID, client_secret: process.env.SHOPIFY_CLIENT_SECRET, grant_type: 'client_credentials' }),
+  });
+  const j = await r.json();
+  if (!j.access_token) throw new Error('Shopify token error: ' + JSON.stringify(j));
+  tokenCache = { token: j.access_token, exp: Date.now() + ((j.expires_in || 86400) - 300) * 1000 };
+  return j.access_token;
+}
+
 async function gql(query, variables) {
   const r = await fetch(`https://${process.env.SHOPIFY_STORE}/admin/api/${API_VERSION}/graphql.json`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': process.env.SHOPIFY_TOKEN },
+    headers: { 'Content-Type': 'application/json', 'X-Shopify-Access-Token': await accessToken() },
     body: JSON.stringify({ query, variables }),
   });
   const j = await r.json();
