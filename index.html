@@ -314,7 +314,7 @@ function render(d) {
       scales: { x: xaxis, y: { ...axis((v) => '$' + compact.format(v)), position: 'left' }, y2: { ...axis((v) => v), position: 'right', grid: { display: false } } } } });
 
   // breakdown
-  const rows = [['Gross sales', S.gross_sales, S.comparison_gross_sales__previous_period], ['Discounts', S.discounts, S.comparison_discounts__previous_period], ['Returns & cancellations', S.sales_reversals, S.comparison_sales_reversals__previous_period],
+  const rows = [['Gross sales', S.gross_sales, S.comparison_gross_sales__previous_period], ['Discounts', S.discounts, S.comparison_discounts__previous_period], ['Returns & cancellations', S.returns, S.comparison_returns__previous_period],
     ['Net sales', S.net_sales, S.comparison_net_sales__previous_period], ['Shipping', S.shipping_charges, S.comparison_shipping_charges__previous_period], ['Taxes', S.taxes, S.comparison_taxes__previous_period], ['Total sales', S.total_sales, S.comparison_total_sales__previous_period]];
   const tb = $('#t-breakdown tbody'); tb.innerHTML = '';
   rows.forEach(([l, v, p]) => { const tr = document.createElement('tr'); const bold = /Net sales|Total sales/.test(l);
