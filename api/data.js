@@ -82,7 +82,7 @@ async function build(from, to, geo) {
   const aiList = AI_REFERRERS.map((s) => `'${s}'`).join(', ');
   const [kpi_sessions, kpi_sales, daily, sales_daily, by_source, orders_by_source, devices, ai_traffic, top_collections, top_products, top_products_sales, fulfillment, reelup_kpi, reelup_weekly, canceled] = await Promise.all([
     ql(`FROM sessions SHOW sessions, online_store_visitors, bounce_rate, conversion_rate, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout ${W}${range} COMPARE TO previous_period`),
-    ql(`FROM sales SHOW orders, gross_sales, discounts, sales_reversals, net_sales, shipping_charges, taxes, total_sales, average_order_value, new_customers, returning_customers, returning_customer_rate ${range} COMPARE TO previous_period`),
+    ql(`FROM sales SHOW orders, gross_sales, discounts, returns, net_sales, shipping_charges, taxes, total_sales, average_order_value, new_customers, returning_customers, returning_customer_rate ${range} COMPARE TO previous_period`),
     ql(`FROM sessions SHOW sessions, bounce_rate, conversion_rate, sessions_that_completed_checkout ${W}TIMESERIES ${days > 120 ? 'week' : 'day'} ${range}`),
     ql(`FROM sales SHOW orders, total_sales, net_sales TIMESERIES ${days > 120 ? 'week' : 'day'} ${range}`),
     ql(`FROM sessions SHOW sessions, sessions_that_completed_checkout, conversion_rate ${W}GROUP BY referrer_source ${range} ORDER BY sessions DESC`),
