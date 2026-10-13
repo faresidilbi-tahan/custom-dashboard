@@ -11,8 +11,6 @@ const API_VERSION = '2026-01';
 const CACHE_MS = 10 * 60 * 1000;
 const cache = new Map(); // key = from|to|geo
 
-const AI_REFERRERS = ['chatgpt', 'openai', 'perplexity', 'gemini', 'claude', 'copilot', 'grok', 'mistral', 'deepseek'];
-
 let tokenCache = { token: null, exp: 0 };
 async function accessToken() {
   if (process.env.SHOPIFY_TOKEN) return process.env.SHOPIFY_TOKEN;
@@ -79,8 +77,7 @@ async function build(from, to, geo) {
   const W = geo === 'lb' ? "WHERE session_country = 'Lebanon' " : '';
   const AND = geo === 'lb' ? "WHERE session_country = 'Lebanon' AND " : 'WHERE ';
   const days = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
-  const aiList = AI_REFERRERS.map((s) => `'${s}'`).join(', ');
-  const [kpi_sessions, kpi_sales, daily, sales_daily, by_source, orders_by_source, devices, ai_traffic, top_collections, top_products, top_products_sales, fulfillment, reelup_kpi, reelup_weekly, canceled] = await Promise.all([
+  const [kpi_sessions, kpi_sales, daily, sales_daily, by_source, orders_by_source, devices, top_collections, top_products, top_products_sales, fulfillment, reelup_kpi, reelup_weekly, canceled] = await Promise.all([
     ql(`FROM sessions SHOW sessions, online_store_visitors, bounce_rate, conversion_rate, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout ${W}${range} COMPARE TO previous_period`),
     ql(`FROM sales SHOW orders, gross_sales, discounts, returns, net_sales, shipping_charges, taxes, total_sales, average_order_value, new_customers, returning_customers, returning_customer_rate ${range} COMPARE TO previous_period`),
     ql(`FROM sessions SHOW sessions, bounce_rate, conversion_rate, sessions_that_completed_checkout ${W}TIMESERIES ${days > 120 ? 'week' : 'day'} ${range}`),
@@ -88,7 +85,6 @@ async function build(from, to, geo) {
     ql(`FROM sessions SHOW sessions, sessions_that_completed_checkout, conversion_rate ${W}GROUP BY referrer_source ${range} ORDER BY sessions DESC`),
     ql(`FROM sales SHOW orders, total_sales GROUP BY order_referrer_source ${range} ORDER BY orders DESC`),
     ql(`FROM sessions SHOW sessions, conversion_rate ${W}GROUP BY session_device_type ${range} ORDER BY sessions DESC`),
-    ql(`FROM sessions SHOW sessions, sessions_that_completed_checkout, conversion_rate ${AND}referrer_name IN (${aiList}) GROUP BY referrer_name ${range} ORDER BY sessions DESC`),
     ql(`FROM sessions SHOW sessions, conversion_rate ${AND}landing_page_type = 'collection' GROUP BY landing_page_path ${range} ORDER BY sessions DESC LIMIT 8`),
     ql(`FROM sales SHOW net_items_sold, orders, net_sales GROUP BY product_title ${range} ORDER BY net_items_sold DESC LIMIT 11`),
     ql(`FROM sales SHOW net_items_sold, orders, net_sales GROUP BY product_title ${range} ORDER BY net_sales DESC LIMIT 11`),
@@ -99,7 +95,7 @@ async function build(from, to, geo) {
   ]);
   return {
     generated_at: new Date().toISOString(), from, to, days, geo,
-    kpi_sessions: kpi_sessions[0], kpi_sales: kpi_sales[0], daily, sales_daily, by_source, orders_by_source, devices, ai_traffic, top_collections,
+    kpi_sessions: kpi_sessions[0], kpi_sales: kpi_sales[0], daily, sales_daily, by_source, orders_by_source, devices, top_collections,
     top_products: top_products.filter((r) => r.product_title).slice(0, 10),
     top_products_sales: top_products_sales.filter((r) => r.product_title).slice(0, 10),
     fulfillment: fulfillment[0],
