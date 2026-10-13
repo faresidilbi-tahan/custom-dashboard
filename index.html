@@ -81,7 +81,6 @@
     <h1>Abed Tahan analytics</h1>
     <div class="seg" id="presets"><button data-days="7">7 days</button><button data-days="30" class="on">30 days</button><button data-days="90">90 days</button><button data-mtd="1">This month</button><button data-lm="1">Last month</button></div>
     <div class="dates"><input type="date" id="from"><span>→</span><input type="date" id="to"><button class="btn" id="apply">Apply</button></div>
-    <div class="seg" id="geo"><button data-geo="lb" class="on" title="Sessions from Lebanon only. Foreign traffic is mostly bots.">Lebanon traffic</button><button data-geo="all">All traffic</button></div>
     <button class="btn ghost" id="refresh" title="Re-pull from Shopify now">Refresh</button>
     <div class="meta" id="meta"></div>
   </div>
@@ -101,7 +100,7 @@
     <div class="card tile"><div class="lbl">Net sales</div><div class="big" id="k-net">—</div><span class="delta" id="d-net"></span></div>
     <div class="card tile"><div class="lbl">Orders</div><div class="big" id="k-orders">—</div><span class="delta" id="d-orders"></span></div>
     <div class="card tile"><div class="lbl">Average order value</div><div class="big" id="k-aov">—</div><span class="delta" id="d-aov"></span></div>
-    <div class="card tile"><div class="lbl" id="l-cr">Conversion rate</div><div class="big" id="k-cr">—</div><span class="delta" id="d-cr"></span></div>
+    <div class="card tile"><div class="lbl">Conversion rate</div><div class="big" id="k-cr">—</div><span class="delta" id="d-cr"></span></div>
     <div class="card tile"><div class="lbl">New customers</div><div class="big" id="k-new">—</div><span class="delta" id="d-new"></span></div>
     <div class="card tile"><div class="lbl">Returning customers</div><div class="big" id="k-ret">—</div><span class="delta" id="d-ret"></span></div>
     <div class="card tile"><div class="lbl">Returning customer rate</div><div class="big" id="k-rr">—</div><span class="delta" id="d-rr"></span></div>
@@ -134,7 +133,7 @@
 <!-- ============ TRAFFIC ============ -->
 <section data-tab="traffic" hidden>
   <div class="tiles">
-    <div class="card tile"><div class="lbl">Sessions</div><div class="big" id="k-sessions">—</div><span class="delta" id="d-sessions"></span></div>
+    <div class="card tile"><div class="lbl" title="Sessions from Lebanon. Foreign traffic is excluded (mostly bots).">Sessions</div><div class="big" id="k-sessions">—</div><span class="delta" id="d-sessions"></span></div>
     <div class="card tile"><div class="lbl">Visitors</div><div class="big" id="k-visitors">—</div><span class="delta" id="d-visitors"></span></div>
     <div class="card tile"><div class="lbl">Conversion rate</div><div class="big" id="k-cr2">—</div><span class="delta" id="d-cr2"></span></div>
     <div class="card tile"><div class="lbl">Bounce rate</div><div class="big" id="k-bounce">—</div><span class="delta" id="d-bounce"></span></div>
@@ -247,7 +246,7 @@ const legend = (show) => ({ display: show, position: 'top', align: 'end', labels
 const palette = ['#2563eb', '#f59e0b', '#7c3aed', '#0d9488', '#db2777', '#64748b', '#84cc16', '#ea580c'];
 
 // ---------- controls ----------
-let geo = 'lb', tab = 'overview';
+let tab = 'overview';
 const range = () => ({ from: $('#from').value, to: $('#to').value });
 const setRange = (from, to) => { $('#from').value = from; $('#to').value = to; };
 $('#from').max = today(); $('#to').max = today();
@@ -263,7 +262,6 @@ document.querySelectorAll('#presets button').forEach((b) => b.addEventListener('
   load(false); }));
 $('#apply').addEventListener('click', () => load(false));
 $('#refresh').addEventListener('click', () => load(true));
-document.querySelectorAll('#geo button').forEach((b) => b.addEventListener('click', () => { geo = b.dataset.geo; document.querySelectorAll('#geo button').forEach((x) => x.classList.toggle('on', x === b)); load(false); }));
 document.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => showTab(b.dataset.tab)));
 function showTab(t) { tab = t; document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === t));
   document.querySelectorAll('section[data-tab]').forEach((s) => { s.hidden = s.dataset.tab !== t; }); location.hash = t; Object.values(charts).forEach((c) => c.resize()); }
@@ -274,7 +272,7 @@ async function load(force) {
   $('#apply').disabled = true; $('#refresh').disabled = true; $('#err').style.display = 'none'; $('#page').classList.add('loading'); markPreset();
   try {
     const { from, to } = range();
-    const r = await fetch(`/api/data?from=${from}&to=${to}&geo=${geo}` + (force ? '&refresh=1' : ''));
+    const r = await fetch(`/api/data?from=${from}&to=${to}` + (force ? '&refresh=1' : ''));
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     DATA = d; render(d);
@@ -287,7 +285,6 @@ async function load(force) {
 function render(d) {
   const S = d.kpi_sales, V = d.kpi_sessions, F = d.fulfillment, C = d.canceled, R = d.reelup_kpi;
   PREV = ` vs previous ${d.days} days`;
-  const scope = d.geo === 'lb' ? 'Lebanon traffic' : 'all traffic';
   const labels = (rows) => rows.map((r) => day(r.day || r.week));
 
   // --- overview tiles ---
@@ -295,13 +292,12 @@ function render(d) {
   $('#k-net').textContent = money(S.net_sales); delta('#d-net', pct(S.net_sales, S.comparison_net_sales__previous_period));
   $('#k-orders').textContent = fN(S.orders); delta('#d-orders', pct(S.orders, S.comparison_orders__previous_period));
   $('#k-aov').textContent = money(S.average_order_value); delta('#d-aov', pct(S.average_order_value, S.comparison_average_order_value__previous_period));
-  $('#l-cr').textContent = 'Conversion rate · ' + scope;
   $('#k-cr').textContent = fP(V.conversion_rate, 2); delta('#d-cr', V.conversion_rate - V.comparison_conversion_rate__previous_period, 'pts');
   $('#k-new').textContent = fN(S.new_customers); delta('#d-new', pct(S.new_customers, S.comparison_new_customers__previous_period));
   $('#k-ret').textContent = fN(S.returning_customers); delta('#d-ret', pct(S.returning_customers, S.comparison_returning_customers__previous_period));
   $('#k-rr').textContent = fP(S.returning_customer_rate); delta('#d-rr', S.returning_customer_rate - S.comparison_returning_customer_rate__previous_period, 'pts');
   const op = pct(S.orders, S.comparison_orders__previous_period);
-  $('#takeaway').textContent = `${day(d.from)} – ${day(d.to)}: ${money(S.total_sales)} total sales from ${fN(S.orders)} orders (${op >= 0 ? '+' : ''}${fP(op)} vs the ${d.days} days before). ${scope[0].toUpperCase() + scope.slice(1)} converted at ${fP(V.conversion_rate, 2)}.`;
+  $('#takeaway').textContent = `${day(d.from)} – ${day(d.to)}: ${money(S.total_sales)} total sales from ${fN(S.orders)} orders (${op >= 0 ? '+' : ''}${fP(op)} vs the ${d.days} days before). Conversion ${fP(V.conversion_rate, 2)}.`;
 
   // sales chart
   chart('#c-sales', { type: 'bar', data: { labels: labels(d.sales_daily), datasets: [
@@ -330,7 +326,7 @@ function render(d) {
 
   // funnel
   const steps = [['Sessions', V.sessions], ['Added to cart', V.sessions_with_cart_additions], ['Reached checkout', V.sessions_that_reached_checkout], ['Completed', V.sessions_that_completed_checkout]];
-  $('#funnel-note').textContent = `${scope[0].toUpperCase() + scope.slice(1)} · share of sessions at each step`;
+  $('#funnel-note').textContent = 'Share of sessions at each step';
   $('#funnel').innerHTML = ''; steps.forEach(([l, v]) => { const s = document.createElement('div'); s.className = 'step';
     s.innerHTML = `<div class="v"></div><div class="l"></div><div class="p"></div>`; s.querySelector('.v').textContent = fN(v); s.querySelector('.l').textContent = l; s.querySelector('.p').textContent = fP(V.sessions ? v / V.sessions : 0, 2); $('#funnel').appendChild(s); });
 
@@ -339,7 +335,7 @@ function render(d) {
   $('#k-visitors').textContent = compact.format(V.online_store_visitors); delta('#d-visitors', pct(V.online_store_visitors, V.comparison_online_store_visitors__previous_period));
   $('#k-cr2').textContent = fP(V.conversion_rate, 2); delta('#d-cr2', V.conversion_rate - V.comparison_conversion_rate__previous_period, 'pts');
   $('#k-bounce').textContent = fP(V.bounce_rate); delta('#d-bounce', V.bounce_rate - V.comparison_bounce_rate__previous_period, 'pts', false);
-  $('#n-sessions').textContent = scope[0].toUpperCase() + scope.slice(1) + (d.days > 120 ? ' · per week' : '');
+  $('#n-sessions').textContent = d.days > 120 ? 'Per week' : 'Per day';
   chart('#c-sessions', { type: 'bar', data: { labels: labels(d.daily), datasets: [{ label: 'Sessions', data: d.daily.map((r) => r.sessions), backgroundColor: palette[0], borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: legend(false), tooltip: tip(fN) }, scales: { x: xaxis, y: axis((v) => compact.format(v)) } } });
   chart('#c-rates', { type: 'line', data: { labels: labels(d.daily), datasets: [
@@ -413,7 +409,7 @@ async function ask(q) {
   const wait = add('ai', 'Thinking…'); $('#chat-send').disabled = true;
   try {
     const { from, to } = range();
-    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history, from, to, geo }) });
+    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history, from, to }) });
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     wait.textContent = j.reply; history.push({ role: 'assistant', content: j.reply });
