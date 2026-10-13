@@ -137,6 +137,7 @@
     <div class="card tile"><div class="lbl">Visitors</div><div class="big" id="k-visitors">—</div><span class="delta" id="d-visitors"></span></div>
     <div class="card tile"><div class="lbl">Conversion rate</div><div class="big" id="k-cr2">—</div><span class="delta" id="d-cr2"></span></div>
     <div class="card tile"><div class="lbl">Bounce rate</div><div class="big" id="k-bounce">—</div><span class="delta" id="d-bounce"></span></div>
+    <div class="card tile"><div class="lbl">AI assistant sessions</div><div class="big" id="k-ai">—</div><span class="delta" id="d-ai"></span></div>
   </div>
   <h2>Over time</h2>
   <div class="grid">
@@ -149,6 +150,8 @@
       <div class="wrap"><table id="t-source"><thead><tr><th>Source</th><th class="n">Sessions</th><th class="n">Checkouts</th><th class="n">CR</th></tr></thead><tbody></tbody></table></div></div>
     <div class="card"><h3>Devices</h3><div class="note">Share of sessions and conversion per device</div><div class="chart sm"><canvas id="c-devices"></canvas></div>
       <div class="wrap"><table id="t-devices"><thead><tr><th>Device</th><th class="n">Sessions</th><th class="n">Share</th><th class="n">CR</th></tr></thead><tbody></tbody></table></div></div>
+    <div class="card"><h3>AI assistants</h3><div class="note">Sessions referred by ChatGPT, Perplexity, Claude, Gemini, Copilot…</div>
+      <div class="wrap"><table id="t-ai"><thead><tr><th>Assistant</th><th class="n">Sessions</th><th class="n">Checkouts</th><th class="n">CR</th></tr></thead><tbody></tbody></table></div></div>
     <div class="card"><h3>Top landing collections</h3><div class="note">Collection pages visitors arrive on, and how they convert</div>
       <div class="wrap"><table id="t-coll"><thead><tr><th>Collection</th><th class="n">Sessions</th><th class="n">CR</th></tr></thead><tbody></tbody></table></div></div>
   </div>
@@ -335,6 +338,9 @@ function render(d) {
   $('#k-visitors').textContent = compact.format(V.online_store_visitors); delta('#d-visitors', pct(V.online_store_visitors, V.comparison_online_store_visitors__previous_period));
   $('#k-cr2').textContent = fP(V.conversion_rate, 2); delta('#d-cr2', V.conversion_rate - V.comparison_conversion_rate__previous_period, 'pts');
   $('#k-bounce').textContent = fP(V.bounce_rate); delta('#d-bounce', V.bounce_rate - V.comparison_bounce_rate__previous_period, 'pts', false);
+  const ai = d.ai_traffic.reduce((a, r) => a + r.sessions, 0), aic = d.ai_traffic.reduce((a, r) => a + r.sessions_that_completed_checkout, 0);
+  $('#k-ai').textContent = fN(ai); const ael = $('#d-ai'); ael.className = 'delta'; ael.textContent = fN(aic) + ' checkouts';
+  table('#t-ai', d.ai_traffic, [[(r) => r.referrer_name], [(r) => fN(r.sessions), 'n'], [(r) => fN(r.sessions_that_completed_checkout), 'n'], [(r) => fP(r.conversion_rate, 2), 'n']]);
   $('#n-sessions').textContent = d.days > 120 ? 'Per week' : 'Per day';
   chart('#c-sessions', { type: 'bar', data: { labels: labels(d.daily), datasets: [{ label: 'Sessions', data: d.daily.map((r) => r.sessions), backgroundColor: palette[0], borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: legend(false), tooltip: tip(fN) }, scales: { x: xaxis, y: axis((v) => compact.format(v)) } } });
@@ -389,6 +395,7 @@ function render(d) {
   const src = Object.fromEntries(d.by_source.map((r) => [r.referrer_source, r]));
   if (src.social && src.search && src.social.conversion_rate < src.search.conversion_rate * 0.8) sug.push(`Social converts at ${fP(src.social.conversion_rate, 2)} vs ${fP(src.search.conversion_rate, 2)} from search: send social ads to deal collections, not the homepage.`);
   if (src.search && src.direct && src.search.sessions < src.direct.sessions * 0.8) sug.push(`Search brings ${fN(src.search.sessions)} sessions vs ${fN(src.direct.sessions)} direct: invest in non-branded SEO (model pages like "iPhone 17 Pro Max price Lebanon").`);
+  if (ai > 0) sug.push(`${ai} sessions came from AI assistants with ${aic} checkouts: add Product/Offer structured data, plain-text specs and an about page with delivery, warranty and branches so assistants can recommend you.`);
   const mob = dv.find((r) => r.session_device_type === 'mobile'), desk = dv.find((r) => r.session_device_type === 'desktop');
   if (mob && desk && mob.conversion_rate < desk.conversion_rate * 0.6) sug.push(`Mobile converts at ${fP(mob.conversion_rate, 2)} vs ${fP(desk.conversion_rate, 2)} on desktop with ${fP(mob.sessions / dvTot, 0)} of traffic: prioritise mobile PDP (sticky add-to-cart, price and stock above the fold, faster images).`);
   $('#sug').innerHTML = ''; sug.forEach((s) => { const li = document.createElement('li'); li.textContent = s; $('#sug').appendChild(li); });
