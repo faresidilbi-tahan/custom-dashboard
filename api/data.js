@@ -1,4 +1,5 @@
-// Vercel serverless function: GET /api/data?from=YYYY-MM-DD&to=YYYY-MM-DD  (&refresh=1 bypasses the 10-minute cache)
+// Vercel serverless function: GET /api/data?from=YYYY-MM-DD&to=YYYY-MM-DD&geo=lb|all  (&refresh=1 bypasses the 10-minute cache)
+// geo=lb (default) counts only sessions from Lebanon; foreign sessions are mostly bots and never convert.
 // Env vars (Vercel → Settings → Environment Variables):
 //   SHOPIFY_STORE          = jad-b-2.myshopify.com
 //   SHOPIFY_CLIENT_ID      = Dev Dashboard app → Credentials → Client ID
@@ -8,7 +9,7 @@
 
 const API_VERSION = '2026-01';
 const CACHE_MS = 10 * 60 * 1000;
-const cache = new Map(); // key = from|to
+const cache = new Map(); // key = from|to|geo
 
 const AI_REFERRERS = ['chatgpt', 'openai', 'perplexity', 'gemini', 'claude', 'copilot', 'grok', 'mistral', 'deepseek'];
 
@@ -73,38 +74,48 @@ async function canceledOrders(from, to) {
 const isDate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(s || '');
 const iso = (d) => d.toISOString().slice(0, 10);
 
-async function build(from, to) {
+async function build(from, to, geo) {
   const range = `SINCE ${from} UNTIL ${to}`;
+  const W = geo === 'lb' ? "WHERE session_country = 'Lebanon' " : '';
+  const AND = geo === 'lb' ? "WHERE session_country = 'Lebanon' AND " : 'WHERE ';
   const days = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
   const aiList = AI_REFERRERS.map((s) => `'${s}'`).join(', ');
-  const [kpi_sessions, kpi_sales, daily, by_source, ai_traffic, top_collections, top_products, reelup_kpi, reelup_weekly, canceled] = await Promise.all([
-    ql(`FROM sessions SHOW sessions, bounce_rate, conversion_rate, sessions_that_completed_checkout ${range} COMPARE TO previous_period`),
-    ql(`FROM sales SHOW orders, net_sales, average_order_value ${range} COMPARE TO previous_period`),
-    ql(`FROM sessions SHOW sessions, bounce_rate, conversion_rate, sessions_that_completed_checkout TIMESERIES ${days > 120 ? 'week' : 'day'} ${range}`),
-    ql(`FROM sessions SHOW sessions, sessions_that_completed_checkout, conversion_rate GROUP BY referrer_source ${range} ORDER BY sessions DESC`),
-    ql(`FROM sessions SHOW sessions, sessions_that_completed_checkout, conversion_rate WHERE referrer_name IN (${aiList}) GROUP BY referrer_name ${range} ORDER BY sessions DESC`),
-    ql(`FROM sessions SHOW sessions, conversion_rate WHERE landing_page_type = 'collection' GROUP BY landing_page_path ${range} ORDER BY sessions DESC LIMIT 5`),
+  const [kpi_sessions, kpi_sales, daily, sales_daily, by_source, orders_by_source, devices, ai_traffic, top_collections, top_products, top_products_sales, fulfillment, reelup_kpi, reelup_weekly, canceled] = await Promise.all([
+    ql(`FROM sessions SHOW sessions, online_store_visitors, bounce_rate, conversion_rate, sessions_with_cart_additions, sessions_that_reached_checkout, sessions_that_completed_checkout ${W}${range} COMPARE TO previous_period`),
+    ql(`FROM sales SHOW orders, gross_sales, discounts, sales_reversals, net_sales, shipping_charges, taxes, total_sales, average_order_value, new_customers, returning_customers, returning_customer_rate ${range} COMPARE TO previous_period`),
+    ql(`FROM sessions SHOW sessions, bounce_rate, conversion_rate, sessions_that_completed_checkout ${W}TIMESERIES ${days > 120 ? 'week' : 'day'} ${range}`),
+    ql(`FROM sales SHOW orders, total_sales, net_sales TIMESERIES ${days > 120 ? 'week' : 'day'} ${range}`),
+    ql(`FROM sessions SHOW sessions, sessions_that_completed_checkout, conversion_rate ${W}GROUP BY referrer_source ${range} ORDER BY sessions DESC`),
+    ql(`FROM sales SHOW orders, total_sales GROUP BY order_referrer_source ${range} ORDER BY orders DESC`),
+    ql(`FROM sessions SHOW sessions, conversion_rate ${W}GROUP BY session_device_type ${range} ORDER BY sessions DESC`),
+    ql(`FROM sessions SHOW sessions, sessions_that_completed_checkout, conversion_rate ${AND}referrer_name IN (${aiList}) GROUP BY referrer_name ${range} ORDER BY sessions DESC`),
+    ql(`FROM sessions SHOW sessions, conversion_rate ${AND}landing_page_type = 'collection' GROUP BY landing_page_path ${range} ORDER BY sessions DESC LIMIT 8`),
     ql(`FROM sales SHOW net_items_sold, orders, net_sales GROUP BY product_title ${range} ORDER BY net_items_sold DESC LIMIT 11`),
+    ql(`FROM sales SHOW net_items_sold, orders, net_sales GROUP BY product_title ${range} ORDER BY net_sales DESC LIMIT 11`),
+    ql(`FROM fulfillments SHOW orders_fulfilled, orders_shipped, orders_delivered ${range}`),
     ql(`FROM sales SHOW orders, net_sales WHERE order_tags CONTAINS 'REELUP' ${range} COMPARE TO previous_period`),
     ql(`FROM sales SHOW orders, net_sales WHERE order_tags CONTAINS 'REELUP' TIMESERIES ${days > 60 ? 'week' : 'day'} ${range}`),
     canceledOrders(from, to),
   ]);
   return {
-    generated_at: new Date().toISOString(), from, to, days,
-    kpi_sessions: kpi_sessions[0], kpi_sales: kpi_sales[0], daily, by_source, ai_traffic, top_collections,
+    generated_at: new Date().toISOString(), from, to, days, geo,
+    kpi_sessions: kpi_sessions[0], kpi_sales: kpi_sales[0], daily, sales_daily, by_source, orders_by_source, devices, ai_traffic, top_collections,
     top_products: top_products.filter((r) => r.product_title).slice(0, 10),
+    top_products_sales: top_products_sales.filter((r) => r.product_title).slice(0, 10),
+    fulfillment: fulfillment[0],
     reelup_kpi: reelup_kpi[0], reelup_weekly, canceled,
   };
 }
 
-async function getData(from, to, force) {
+async function getData(from, to, geo, force) {
+  geo = geo === 'all' ? 'all' : 'lb';
   const today = iso(new Date());
   if (!isDate(to) || to > today) to = today;
   if (!isDate(from) || from > to) from = iso(new Date(new Date(to) - 29 * 86400000));
-  const key = from + '|' + to;
+  const key = from + '|' + to + '|' + geo;
   const hit = cache.get(key);
   if (!force && hit && Date.now() - hit.at < CACHE_MS) return hit.data;
-  const data = await build(from, to);
+  const data = await build(from, to, geo);
   cache.set(key, { at: Date.now(), data });
   return data;
 }
@@ -114,7 +125,7 @@ module.exports = async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   try {
     const q = req.query || {};
-    res.status(200).json(await getData(q.from, q.to, !!q.refresh));
+    res.status(200).json(await getData(q.from, q.to, q.geo, !!q.refresh));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
