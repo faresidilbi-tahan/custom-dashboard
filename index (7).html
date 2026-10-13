@@ -1,0 +1,270 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abed Tahan store analytics</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root { --bg:#f6f6f4; --panel:#fff; --line:#e4e4e0; --fg:#1a1a1a; --muted:#6b6b66; --ok:#1a7f4b; --bad:#b42318; --c1:#2a6df4; --c2:#f2994a; --c3:#7b5cd6; --c4:#1aa28a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.45 -apple-system, "Segoe UI", Inter, Arial, sans-serif; font-variant-numeric: tabular-nums; }
+  .page { max-width:1200px; margin:0 auto; padding:24px 40px; }
+  @media (max-width:1024px){ .page{ padding:16px 15px; } }
+  header { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+  h1 { margin:0; font-size:26px; font-weight:500; }
+  .take { color:var(--muted); margin:4px 0 0; }
+  button { background:var(--fg); color:#fff; border:0; border-radius:8px; padding:9px 14px; font-size:14px; cursor:pointer; }
+  button:disabled { opacity:.5; }
+  .meta { font-size:12px; color:var(--muted); text-align:right; }
+  h2 { font-size:17px; font-weight:600; margin:28px 0 10px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap:14px; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap:14px; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px; min-width:0; }
+  .card h3 { margin:0; font-size:15px; font-weight:600; }
+  .note { color:var(--muted); font-size:12px; margin:2px 0 10px; }
+  .lbl { color:var(--muted); font-size:12px; }
+  .big { font-size:30px; line-height:1.15; margin:2px 0; font-weight:500; }
+  .delta { font-size:12px; color:var(--muted); }
+  .up { color:var(--ok); } .down { color:var(--bad); }
+  .chart { position:relative; height:230px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-size:12px; font-weight:600; position:sticky; top:0; background:var(--panel); }
+  td.n, th.n { text-align:right; white-space:nowrap; }
+  .scroll { max-height:420px; overflow:auto; } .wrap { overflow-x:auto; }
+  .bar { position:relative; } .bar span { position:relative; } .bar i { position:absolute; left:0; top:4px; bottom:4px; background:var(--c1); opacity:.15; border-radius:3px; }
+  ul.sug { margin:0; padding-left:1.2em; } ul.sug li { margin:6px 0; }
+  .err { background:#fdecea; color:var(--bad); padding:10px 14px; border-radius:8px; margin-bottom:14px; display:none; }
+  .tile.sm .big { font-size:24px; }
+  .controls { display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .presets, .dates { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .dates input { border:1px solid var(--line); border-radius:8px; padding:7px 8px; font:inherit; font-size:14px; background:var(--panel); }
+  button.ghost { background:var(--panel); color:var(--fg); border:1px solid var(--line); }
+  button.ghost.on { background:var(--fg); color:#fff; }
+  /* chat */
+  #chat-fab { position:fixed; right:20px; bottom:20px; border-radius:999px; padding:12px 18px; font-size:15px; box-shadow:0 4px 16px rgba(0,0,0,.2); z-index:10; }
+  #chat { position:fixed; right:20px; bottom:20px; width:min(420px, calc(100vw - 40px)); height:min(620px, calc(100vh - 40px)); background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 8px 32px rgba(0,0,0,.18); display:none; flex-direction:column; z-index:11; }
+  #chat.open { display:flex; }
+  #chat .head { display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1px solid var(--line); font-weight:600; }
+  #chat .head button { background:none; color:var(--muted); font-size:18px; padding:0 4px; }
+  #chat .log { flex:1; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:88%; padding:9px 12px; border-radius:12px; white-space:pre-wrap; font-size:14px; line-height:1.4; }
+  .msg.user { align-self:flex-end; background:var(--fg); color:#fff; border-bottom-right-radius:4px; }
+  .msg.ai { align-self:flex-start; background:var(--bg); border-bottom-left-radius:4px; }
+  .msg.ai.err { color:var(--bad); }
+  #chat .chips { display:flex; gap:6px; flex-wrap:wrap; padding:0 12px 8px; }
+  #chat .chips button { font-size:12px; padding:5px 9px; }
+  #chat form { display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--line); }
+  #chat textarea { flex:1; resize:none; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font:inherit; font-size:14px; height:40px; }
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+  <div><h1>Abed Tahan store analytics</h1><p class="take" id="takeaway">Loading…</p></div>
+  <div class="controls">
+    <div class="presets"><button class="ghost" data-days="7">7d</button><button class="ghost" data-days="30">30d</button><button class="ghost" data-days="90">90d</button><button class="ghost" data-mtd="1">This month</button></div>
+    <div class="dates"><input type="date" id="from"> <span>→</span> <input type="date" id="to"> <button id="apply">Apply</button><button id="refresh" class="ghost" title="Re-pull from Shopify">Refresh</button></div>
+    <div class="meta" id="meta"></div>
+  </div>
+</header>
+<div class="err" id="err"></div>
+
+<div class="tiles">
+  <div class="card tile"><div class="lbl" id="k-orders-lbl">Orders</div><div class="big" id="k-orders">—</div><div class="delta" id="d-orders"></div></div>
+  <div class="card tile"><div class="lbl">Net sales · USD</div><div class="big" id="k-sales">—</div><div class="delta" id="d-sales"></div></div>
+  <div class="card tile"><div class="lbl">Conversion rate</div><div class="big" id="k-cr">—</div><div class="delta" id="d-cr"></div></div>
+  <div class="card tile"><div class="lbl">Bounce rate</div><div class="big" id="k-bounce">—</div><div class="delta" id="d-bounce"></div></div>
+  <div class="card tile"><div class="lbl">Sessions</div><div class="big" id="k-sessions">—</div><div class="delta" id="d-sessions"></div></div>
+  <div class="card tile"><div class="lbl" id="k-cancel-lbl">Canceled orders</div><div class="big" id="k-cancel">—</div><div class="delta" id="d-cancel"></div></div>
+</div>
+
+<h2>Traffic &amp; conversion</h2>
+<div class="grid">
+  <div class="card"><h3>Sessions per day</h3><div class="note">Selected period</div><div class="chart"><canvas id="c-sessions"></canvas></div></div>
+  <div class="card"><h3>Conversion &amp; bounce rate</h3><div class="note">Per day (per week for long ranges)</div><div class="chart"><canvas id="c-rates"></canvas></div></div>
+</div>
+<div class="grid" style="margin-top:14px">
+  <div class="card"><h3>Traffic by source</h3><div class="note">Sessions and completed checkouts, selected period</div>
+    <div class="wrap"><table id="t-source"><thead><tr><th>Source</th><th class="n">Sessions</th><th class="n">Checkouts</th><th class="n">CR</th></tr></thead><tbody></tbody></table></div></div>
+  <div class="card"><h3>AI traffic</h3><div class="note">Sessions referred by AI assistants (ChatGPT, Perplexity, Claude, Gemini, Copilot…), selected period</div>
+    <div class="tiles" style="margin-bottom:10px"><div class="tile sm"><div class="lbl">Sessions</div><div class="big" id="ai-s">—</div></div><div class="tile sm"><div class="lbl">Checkouts</div><div class="big" id="ai-c">—</div></div></div>
+    <div class="wrap"><table id="t-ai"><thead><tr><th>Assistant</th><th class="n">Sessions</th><th class="n">Checkouts</th><th class="n">CR</th></tr></thead><tbody></tbody></table></div></div>
+</div>
+
+<h2>Collections &amp; products</h2>
+<div class="grid">
+  <div class="card"><h3>Top 5 visited collections</h3><div class="note">Sessions that landed on a collection page, selected period</div>
+    <div class="wrap"><table id="t-coll"><thead><tr><th>Collection</th><th class="n">Sessions</th><th class="n">CR</th></tr></thead><tbody></tbody></table></div></div>
+  <div class="card"><h3>Top selling products</h3><div class="note">By units sold, selected period</div>
+    <div class="wrap"><table id="t-prod"><thead><tr><th>Product</th><th class="n">Units</th><th class="n">Orders</th><th class="n">Net sales</th></tr></thead><tbody></tbody></table></div></div>
+</div>
+
+<h2>ReelUp performance</h2>
+<div class="grid">
+  <div class="card"><h3>Orders tagged REELUP</h3><div class="note">Selected period vs the same length before</div>
+    <div class="tiles"><div class="tile sm"><div class="lbl">Orders</div><div class="big" id="r-orders">—</div><div class="delta" id="r-d-orders"></div></div><div class="tile sm"><div class="lbl">Net sales · USD</div><div class="big" id="r-sales">—</div><div class="delta" id="r-d-sales"></div></div></div></div>
+  <div class="card"><h3>ReelUp orders per week</h3><div class="note">Selected period</div><div class="chart"><canvas id="c-reelup"></canvas></div></div>
+</div>
+
+<h2>Canceled orders</h2>
+<div class="grid">
+  <div class="card"><h3>Canceled by</h3><div class="note" id="by-note">"Customer" = self-cancel via the Yagi Order Cancellable app.</div>
+    <table id="t-by"><thead><tr><th>Who</th><th class="n">Orders</th><th class="n">Value</th></tr></thead><tbody></tbody></table></div>
+  <div class="card"><h3>Cancel reason</h3><div class="note">Reason recorded in Shopify at cancellation</div>
+    <table id="t-reason"><thead><tr><th>Reason</th><th class="n">Orders</th><th class="n">Value</th></tr></thead><tbody></tbody></table></div>
+</div>
+<div class="card" style="margin-top:14px"><h3>All canceled orders</h3><div class="note">Newest first, up to 200 orders</div>
+  <div class="scroll wrap"><table id="t-cancel"><thead><tr><th>Order</th><th>Created</th><th>Canceled</th><th>Canceled by</th><th>Reason</th><th>Note</th><th class="n">Total</th><th>Items</th></tr></thead><tbody></tbody></table></div></div>
+
+<h2>Suggestions</h2>
+<div class="card"><h3>What to improve</h3><div class="note">Derived from the numbers above — ask the AI chat for detail</div><ul class="sug" id="sug"></ul></div>
+</div>
+
+<button id="chat-fab">Ask AI</button>
+<div id="chat">
+  <div class="head"><span>Store assistant</span><button id="chat-close" title="Close">×</button></div>
+  <div class="log" id="chat-log"><div class="msg ai">Ask me anything about the numbers on this page, or what to improve. I see the same data you do, for the selected dates.</div></div>
+  <div class="chips">
+    <button class="ghost" data-q="What are the 3 most important things to improve this period, and how?">What to improve</button>
+    <button class="ghost" data-q="Why are orders being canceled and how do we reduce cancellations?">Cancellations</button>
+    <button class="ghost" data-q="Which traffic source converts worst and what should we change?">Traffic</button>
+    <button class="ghost" data-q="Which products and collections should we push this week, and where?">Products</button>
+  </div>
+  <form id="chat-form"><textarea id="chat-in" placeholder="Ask about sales, cancellations, traffic, products…" rows="1"></textarea><button type="submit" id="chat-send">Send</button></form>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const fN = (v) => Number(v).toLocaleString('en');
+const fP = (v, d = 1) => (v * 100).toFixed(d) + '%';
+const compact = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 });
+const money = (v) => '$' + (Math.abs(v) >= 10000 ? compact.format(v) : fN(Math.round(v)));
+const day = (s) => s ? new Date(s).toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' }) : '';
+const mon = (s) => new Date(s).toLocaleDateString('en', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+const pct = (a, b) => (b ? (a - b) / b : null);
+const delta = (id, v, kind, goodUp = true, suffix = ' vs previous 30 days') => {
+  const el = $(id); if (v == null || !isFinite(v)) { el.textContent = ''; return; }
+  el.className = 'delta ' + (v === 0 ? '' : (goodUp ? v >= 0 : v <= 0) ? 'up' : 'down');
+  el.textContent = (v > 0 ? '+' : '') + (kind === 'pts' ? (v * 100).toFixed(1) + ' pts' : fP(v)) + suffix;
+};
+const table = (id, rows, cells, barCol, barMax) => {
+  const tb = $(id + ' tbody'); tb.innerHTML = '';
+  rows.forEach((r) => { const tr = document.createElement('tr');
+    cells.forEach(([f, cls], i) => { const td = document.createElement('td'); if (cls) td.className = cls; const v = f(r);
+      if (i === barCol && barMax) { td.classList.add('bar'); const b = document.createElement('i'); b.style.width = (r.__bar / barMax * 100) + '%'; const s = document.createElement('span'); s.textContent = v; td.append(b, s); } else td.textContent = v;
+      tr.appendChild(td); });
+    tb.appendChild(tr); });
+};
+const charts = {};
+const chart = (id, cfg) => { if (charts[id]) charts[id].destroy(); charts[id] = new Chart($(id), cfg); };
+const base = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false }, ticks: { maxTicksLimit: 8 } }, y: { beginAtZero: true, grid: { color: '#eee' } } } };
+
+const iso = (d) => d.toISOString().slice(0, 10);
+const range = () => ({ from: $('#from').value, to: $('#to').value });
+const setRange = (from, to) => { $('#from').value = from; $('#to').value = to; };
+const today = () => iso(new Date());
+const daysAgo = (n) => iso(new Date(Date.now() - n * 86400000));
+const markPreset = () => { const { from, to } = range(); const n = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+  document.querySelectorAll('.presets button').forEach((b) => b.classList.toggle('on', to === today() && (b.dataset.days ? +b.dataset.days === n : from === today().slice(0, 8) + '01'))); };
+$('#from').max = today(); $('#to').max = today();
+setRange(daysAgo(29), today());
+document.querySelectorAll('.presets button').forEach((b) => b.addEventListener('click', () => {
+  if (b.dataset.days) setRange(daysAgo(+b.dataset.days - 1), today()); else setRange(today().slice(0, 8) + '01', today());
+  load(false); }));
+$('#apply').addEventListener('click', () => load(false));
+
+async function load(force) {
+  const btn = $('#apply'); btn.disabled = true; btn.textContent = 'Loading…'; $('#err').style.display = 'none'; markPreset();
+  try {
+    const { from, to } = range();
+    const r = await fetch(`/api/data?from=${from}&to=${to}` + (force ? '&refresh=1' : ''));
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    render(d);
+    $('#meta').textContent = 'Data as of ' + new Date(d.generated_at).toLocaleString();
+  } catch (e) { $('#err').textContent = 'Failed to load: ' + e.message; $('#err').style.display = 'block'; }
+  btn.disabled = false; btn.textContent = 'Apply';
+}
+
+function render(d) {
+  const S = d.kpi_sales, V = d.kpi_sessions;
+  const per = `${d.days} days`, prev = ` vs previous ${d.days} days`;
+  $('#k-orders').textContent = fN(S.orders); $('#k-sales').textContent = money(S.net_sales);
+  $('#k-cr').textContent = fP(V.conversion_rate, 2); $('#k-bounce').textContent = fP(V.bounce_rate); $('#k-sessions').textContent = compact.format(V.sessions);
+  const op = pct(S.orders, S.comparison_orders__previous_period);
+  $('#k-orders-lbl').textContent = 'Orders · ' + per;
+  delta('#d-orders', op, 'pct', true, prev); delta('#d-sales', pct(S.net_sales, S.comparison_net_sales__previous_period), 'pct', true, prev); delta('#d-sessions', pct(V.sessions, V.comparison_sessions__previous_period), 'pct', true, prev);
+  delta('#d-cr', V.conversion_rate - V.comparison_conversion_rate__previous_period, 'pts', true, prev); delta('#d-bounce', V.bounce_rate - V.comparison_bounce_rate__previous_period, 'pts', false, prev);
+  $('#takeaway').textContent = `${fN(S.orders)} orders from ${day(d.from)} to ${day(d.to)} (${op >= 0 ? '+' : ''}${fP(op)} vs the ${d.days} days before), converting ${fP(V.conversion_rate, 2)} of ${compact.format(V.sessions)} sessions.`;
+
+  const C = d.canceled;
+  $('#k-cancel-lbl').textContent = 'Canceled orders · created in period';
+  $('#k-cancel').textContent = fN(C.length); $('#d-cancel').textContent = 'value ' + money(C.reduce((a, r) => a + r.total, 0));
+
+  chart('#c-sessions', { type: 'bar', data: { labels: d.daily.map((r) => day(r.day || r.week)), datasets: [{ data: d.daily.map((r) => r.sessions), backgroundColor: '#2a6df4', borderRadius: 4 }] }, options: base });
+  chart('#c-rates', { type: 'line', data: { labels: d.daily.map((r) => day(r.day || r.week)), datasets: [
+    { label: 'Bounce rate', data: d.daily.map((r) => r.bounce_rate * 100), borderColor: '#f2994a', pointRadius: 0, tension: 0 },
+    { label: 'Conversion rate', data: d.daily.map((r) => r.conversion_rate * 100), borderColor: '#2a6df4', pointRadius: 0, tension: 0 }] },
+    options: { ...base, plugins: { legend: { display: true, position: 'top' } }, scales: { ...base.scales, y: { beginAtZero: true, ticks: { callback: (v) => v + '%' } } } } });
+
+  const bs = d.by_source.map((r) => ({ ...r, __bar: r.sessions }));
+  table('#t-source', bs, [[(r) => r.referrer_source || '(none)'], [(r) => fN(r.sessions), 'n'], [(r) => fN(r.sessions_that_completed_checkout), 'n'], [(r) => fP(r.conversion_rate, 2), 'n']], 1, Math.max(...bs.map((r) => r.sessions)));
+  $('#ai-s').textContent = fN(d.ai_traffic.reduce((a, r) => a + r.sessions, 0)); $('#ai-c').textContent = fN(d.ai_traffic.reduce((a, r) => a + r.sessions_that_completed_checkout, 0));
+  table('#t-ai', d.ai_traffic, [[(r) => r.referrer_name], [(r) => fN(r.sessions), 'n'], [(r) => fN(r.sessions_that_completed_checkout), 'n'], [(r) => fP(r.conversion_rate, 2), 'n']]);
+
+  const tc = d.top_collections.map((r) => ({ ...r, __bar: r.sessions }));
+  table('#t-coll', tc, [[(r) => r.landing_page_path], [(r) => fN(r.sessions), 'n'], [(r) => fP(r.conversion_rate, 2), 'n']], 1, Math.max(...tc.map((r) => r.sessions)));
+  const tp = d.top_products.map((r) => ({ ...r, __bar: r.net_items_sold }));
+  table('#t-prod', tp, [[(r) => r.product_title], [(r) => fN(r.net_items_sold), 'n'], [(r) => fN(r.orders), 'n'], [(r) => money(r.net_sales), 'n']], 1, Math.max(...tp.map((r) => r.net_items_sold)));
+
+  const R = d.reelup_kpi;
+  $('#r-orders').textContent = fN(R.orders); $('#r-sales').textContent = money(R.net_sales);
+  delta('#r-d-orders', pct(R.orders, R.comparison_orders__previous_period), 'pct', true, prev); delta('#r-d-sales', pct(R.net_sales, R.comparison_net_sales__previous_period), 'pct', true, prev);
+  chart('#c-reelup', { type: 'bar', data: { labels: d.reelup_weekly.map((r) => (r.week ? 'w/c ' + day(r.week) : day(r.day))), datasets: [{ data: d.reelup_weekly.map((r) => r.orders), backgroundColor: '#7b5cd6', borderRadius: 4 }] }, options: base });
+
+  const group = (key) => { const m = {}; C.forEach((r) => { const k = r[key] || 'NONE'; m[k] = m[k] || { k, count: 0, value: 0 }; m[k].count++; m[k].value += r.total; }); return Object.values(m).sort((a, b) => b.count - a.count); };
+  table('#t-by', group('canceled_by'), [[(r) => r.k], [(r) => fN(r.count), 'n'], [(r) => money(r.value), 'n']]);
+  table('#t-reason', group('reason'), [[(r) => r.k], [(r) => fN(r.count), 'n'], [(r) => money(r.value), 'n']]);
+  table('#t-cancel', C, [[(r) => r.name], [(r) => day(r.created_at)], [(r) => day(r.cancelled_at)], [(r) => r.canceled_by], [(r) => r.reason], [(r) => r.staff_note], [(r) => money(r.total), 'n'], [(r) => r.items]]);
+
+  const sug = [];
+  const ai = d.ai_traffic.reduce((a, r) => a + r.sessions, 0), aic = d.ai_traffic.reduce((a, r) => a + r.sessions_that_completed_checkout, 0);
+  if (ai > 0) sug.push(`${ai} sessions came from AI assistants with ${aic} checkouts. Make product pages answer-ready: full specs in plain text, price and stock on the first screen, Product + Offer structured data, and an about page with store facts (branches, delivery, warranty) assistants can quote.`);
+  if (V.bounce_rate > 0.5) sug.push(`Bounce rate is ${fP(V.bounce_rate, 0)}. Landing pages are mostly the homepage and search: show live deals and category tiles on the first screen and check mobile speed on collection pages.`);
+  const src = Object.fromEntries(d.by_source.map((r) => [r.referrer_source, r]));
+  if (src.search && src.direct && src.search.sessions < src.direct.sessions * 0.8) sug.push(`Search brings ${fN(src.search.sessions)} sessions vs ${fN(src.direct.sessions)} direct: room for non-branded SEO (brand and model pages such as "iPhone 17 Pro Max price Lebanon").`);
+  if (src.social && src.search && src.social.conversion_rate < src.search.conversion_rate * 0.8) sug.push(`Social converts at ${fP(src.social.conversion_rate, 2)} vs ${fP(src.search.conversion_rate, 2)} from search: send social traffic to deal collections, not the homepage.`);
+  $('#sug').innerHTML = ''; sug.forEach((s) => { const li = document.createElement('li'); li.textContent = s; $('#sug').appendChild(li); });
+}
+
+$('#refresh').addEventListener('click', () => load(true));
+load(false);
+
+// ---------- AI chat ----------
+const history = [];
+const chatEl = $('#chat'), log = $('#chat-log'), input = $('#chat-in');
+const openChat = (o) => { chatEl.classList.toggle('open', o); $('#chat-fab').style.display = o ? 'none' : ''; if (o) input.focus(); };
+$('#chat-fab').addEventListener('click', () => openChat(true));
+$('#chat-close').addEventListener('click', () => openChat(false));
+const add = (role, text, cls = '') => { const m = document.createElement('div'); m.className = 'msg ' + role + ' ' + cls; m.textContent = text; log.appendChild(m); log.scrollTop = log.scrollHeight; return m; };
+async function ask(q) {
+  q = q.trim(); if (!q) return;
+  add('user', q); history.push({ role: 'user', content: q }); input.value = '';
+  const wait = add('ai', 'Thinking…'); $('#chat-send').disabled = true;
+  try {
+    const { from, to } = range();
+    const r = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: history, from, to }) });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    wait.textContent = j.reply; history.push({ role: 'assistant', content: j.reply });
+  } catch (e) { wait.textContent = 'Error: ' + e.message; wait.classList.add('err'); history.pop(); }
+  $('#chat-send').disabled = false; log.scrollTop = log.scrollHeight;
+}
+$('#chat-form').addEventListener('submit', (e) => { e.preventDefault(); ask(input.value); });
+input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(input.value); } });
+document.querySelectorAll('#chat .chips button').forEach((b) => b.addEventListener('click', () => ask(b.dataset.q)));
+</script>
+</body>
+</html>
