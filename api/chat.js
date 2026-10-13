@@ -1,4 +1,4 @@
-// POST /api/chat  { messages: [{role, content}], from, to }
+// POST /api/chat  { messages: [{role, content}], from, to, geo }
 // Env: ANTHROPIC_API_KEY (required), ANTHROPIC_MODEL (optional, default claude-sonnet-4-6)
 const { getData } = require('./data.js');
 
@@ -11,10 +11,10 @@ Customers can self-cancel through the Yagi Order Cancellable app; those show as 
 function slim(d) {
   // keep the payload small: top rows only
   return {
-    period: { from: d.from, to: d.to, days: d.days },
+    period: { from: d.from, to: d.to, days: d.days, sessions_scope: d.geo === 'lb' ? 'Lebanon sessions only (foreign traffic is mostly bots)' : 'all countries' },
     kpi_sales: d.kpi_sales, kpi_sessions: d.kpi_sessions,
-    daily: d.daily, by_source: d.by_source, ai_traffic: d.ai_traffic,
-    top_collections: d.top_collections, top_products: d.top_products,
+    daily: d.daily, sales_daily: d.sales_daily, by_source: d.by_source, orders_by_source: d.orders_by_source, devices: d.devices, ai_traffic: d.ai_traffic, fulfillment: d.fulfillment,
+    top_collections: d.top_collections, top_products_by_units: d.top_products, top_products_by_sales: d.top_products_sales,
     reelup_kpi: d.reelup_kpi, reelup_weekly: d.reelup_weekly,
     canceled_count: d.canceled.length,
     canceled_value: d.canceled.reduce((a, r) => a + r.total, 0),
@@ -32,11 +32,11 @@ module.exports = async (req, res) => {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {});
     const messages = (body.messages || []).filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string').slice(-20);
     if (!messages.length) throw new Error('no messages');
-    const data = await getData(body.from, body.to, false);
+    const data = await getData(body.from, body.to, body.geo, false);
 
     const system = `You are the analytics assistant inside the Abed Tahan store dashboard. Answer questions about the store's Shopify performance and give concrete, prioritized improvement advice (what to change, where in Shopify/theme/marketing, and the expected effect).
 ${STORE}
-Rules: use ONLY the data below for numbers; say when something is not in the data. Be direct and concise, use short bullets for action lists, and quantify when possible. Money is USD. Rates are fractions (0.0045 = 0.45%). The data covers ${data.from} to ${data.to}; "previous period" = the same number of days before it.
+Rules: use ONLY the data below for numbers; say when something is not in the data. Be direct and concise, use short bullets for action lists, and quantify when possible. Money is USD. Rates are fractions (0.0045 = 0.45%). The data covers ${data.from} to ${data.to}; "previous period" = the same number of days before it. Session metrics (sessions, conversion rate, bounce rate, sources, AI traffic, collections) are ${data.geo === 'lb' ? 'Lebanon-only: foreign traffic is excluded because it is mostly bots and never converts' : 'for all countries, including bot-heavy foreign traffic'}. Orders and sales always cover all orders.
 
 DASHBOARD DATA (JSON):
 ${JSON.stringify(slim(data))}`;
